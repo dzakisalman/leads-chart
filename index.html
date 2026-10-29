@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Rekapitulasi Leads - Total & Per Kota</title>
+  <meta name="description" content="Dashboard visualisasi dan rekapitulasi data total leads dan sebaran per kota secara interaktif dengan tabel dan chart.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css?v=20261029_layout_copyright">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container">
+    <!-- Header Section -->
+    <header class="header">
+      <div class="brand-wrapper">
+        <div class="brand-icon">📊</div>
+        <div class="brand-title">
+          <h1>
+            Rekap Data Leads
+            <span class="badge badge-primary" id="brand-scraper-badge">Semua Scraper</span>
+          </h1>
+          <p>Visualisasi total leads, distribusi per kota, sumber platform, dan analisis prioritas</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="theme-toggle-btn" class="theme-toggle-btn" onclick="toggleTheme()" title="Ganti Tema Gelap / Terang">
+          🌙
+        </button>
+        <button class="btn btn-outline" onclick="exportCSV()" id="export-csv-btn">
+          📥 Export CSV
+        </button>
+        <a href="leads_chart.png" download="leads_chart.png" class="btn btn-primary" id="download-chart-btn">
+          🖼️ Download Chart PNG
+        </a>
+      </div>
+    </header>
+
+    <!-- Google Sheet Sync & Live Status Banner -->
+    <div class="sheet-status-banner">
+      <div class="sheet-status-info">
+        <span class="sheet-live-dot" title="Tersambung ke Google Sheets"></span>
+        <div class="sheet-info-text">
+          <div class="sheet-status-title-row">
+            <span class="sheet-status-badge">Google Sheets Live</span>
+            <span class="sheet-tab-name">Tab: <strong>[SOCIAL MEDIA SCRAPING]</strong></span>
+          </div>
+          <span class="sheet-last-sync" id="sheet-sync-status">Memuat status sinkronisasi...</span>
+        </div>
+      </div>
+      <div class="sheet-status-actions">
+        <div class="scraper-quick-select" style="display: inline-flex; align-items: center; gap: 0.4rem; background: var(--bg-surface); padding: 0.35rem 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+          <span style="font-size: 0.8125rem; font-weight: 700; color: var(--text-main); white-space: nowrap;">👤 Scraper:</span>
+          <select id="header-filter-scraper" class="filter-select" style="padding: 0.2rem 0.4rem; font-size: 0.8125rem; font-weight: 700; border: none; background: transparent; cursor: pointer; color: var(--primary);" onchange="updateScraperScope(this.value)">
+            <option value="all">Semua Scraper</option>
+          </select>
+        </div>
+        <a href="https://docs.google.com/spreadsheets/d/17zB_EjnHGmDRFrXixR3lvVVj93ggs7Z95zlgc-aF-nU/edit?usp=sharing" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline sheet-link-btn" id="sheet-open-link" title="Buka Spreadsheet di Google Docs">
+          📑 Buka Spreadsheet ↗
+        </a>
+        <button id="btn-sheet-settings" class="btn btn-sm btn-outline" onclick="openSheetSettingsModal()" title="Ubah link atau tab spreadsheet">
+          ⚙️ Ganti Link
+        </button>
+        <button id="btn-sync-sheet" class="btn btn-sm btn-primary sync-btn" onclick="syncFromGoogleSheet()" title="Tarik data terbaru langsung dari Google Sheet">
+          <span class="sync-icon" id="sync-icon">🔄</span>
+          <span id="sync-text">Tarik Data Baru</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Modal Pengaturan Link Spreadsheet -->
+    <div id="sheet-modal" class="modal-overlay" onclick="handleModalBackdropClick(event)">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3>⚙️ Pengaturan Sumber Google Sheets</h3>
+          <button class="modal-close-btn" onclick="closeSheetSettingsModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Kamu dapat mengganti link Google Spreadsheet kapan saja. Pastikan sheet sudah diset agar <em>"Anyone with the link can view"</em>.
+          </p>
+          <div class="form-group">
+            <label for="input-sheet-url"><strong>Link Google Spreadsheet atau ID:</strong></label>
+            <input type="text" id="input-sheet-url" class="form-input" placeholder="https://docs.google.com/spreadsheets/d/.../edit atau ID saja">
+          </div>
+          <div class="form-group" style="margin-top: 0.85rem;">
+            <label for="input-sheet-tab"><strong>Nama Tab Sheet:</strong></label>
+            <input type="text" id="input-sheet-tab" class="form-input" placeholder="[SOCIAL MEDIA SCRAPING]">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline btn-sm" onclick="resetDefaultSheet()">🔄 Reset ke Default</button>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-outline btn-sm" onclick="closeSheetSettingsModal()">Batal</button>
+            <button class="btn btn-primary btn-sm" onclick="saveSheetSettings()">💾 Simpan & Tarik Data</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast" role="alert" aria-live="polite"></div>
+
+    <!-- KPI Summary Cards -->
+    <section class="kpi-grid" aria-label="Ringkasan Utama">
+      <div class="kpi-card blue">
+        <div class="kpi-header">
+          <span class="kpi-title">Total Leads</span>
+          <div class="kpi-icon">🎯</div>
+        </div>
+        <div class="kpi-value" id="kpi-total-leads">486</div>
+        <div class="kpi-subtext" id="kpi-total-leads-subtext">
+          <span class="badge badge-primary">Semua Scraper</span>
+          100% Leads Terfilter
+        </div>
+      </div>
+
+      <div class="kpi-card teal">
+        <div class="kpi-header">
+          <span class="kpi-title">Cakupan Wilayah</span>
+          <div class="kpi-icon">🏙️</div>
+        </div>
+        <div class="kpi-value" id="kpi-total-cities">10 Kota</div>
+        <div class="kpi-subtext" id="kpi-region-subtext">
+          <span class="badge badge-secondary">5 Region</span>
+          CWJ, EJBN, Jabodetabek, Sumatera, EI
+        </div>
+      </div>
+
+      <div class="kpi-card purple">
+        <div class="kpi-header">
+          <span class="kpi-title">Kota Terbanyak</span>
+          <div class="kpi-icon">🏆</div>
+        </div>
+        <div class="kpi-value" id="kpi-top-city">Garut</div>
+        <div class="kpi-subtext" id="kpi-top-city-subtext">
+          <span class="badge badge-purple" id="kpi-top-city-badge">119 Leads</span>
+          <span id="kpi-top-city-pct">24.5%</span> dari total leads
+        </div>
+      </div>
+
+      <div class="kpi-card orange">
+        <div class="kpi-header">
+          <span class="kpi-title">Platform Utama</span>
+          <div class="kpi-icon">📱</div>
+        </div>
+        <div class="kpi-value" id="kpi-top-platform">TikTok</div>
+        <div class="kpi-subtext" id="kpi-top-platform-subtext">
+          <span class="badge badge-orange" id="kpi-top-platform-badge">395 Leads</span>
+          <span id="kpi-top-platform-pct">81.3%</span> kontribusi sumber
+        </div>
+      </div>
+    </section>
+
+    <!-- Sanity Check GoFood & Incentive Section -->
+    <section class="incentive-card" aria-label="Ringkasan Sanity Check & Insentif GoFood">
+      <div class="incentive-header">
+        <div class="incentive-title-group">
+          <div class="incentive-icon">💰</div>
+          <div>
+            <h3>Status Sanity Check Internal (GoFood) & Rekap Insentif</h3>
+            <p>Perhitungan insentif <strong>Rp 5.000</strong> per leads berstatus <strong>Virgin</strong> hasil verifikasi tim internal GoFood</p>
+          </div>
+        </div>
+        <div class="incentive-total-badge">
+          <span class="incentive-badge-label">Total Diterima (Virgin)</span>
+          <span class="incentive-badge-value" id="incentive-earned-val">Rp 240.000</span>
+        </div>
+      </div>
+      <div class="incentive-stats-grid">
+        <div class="incentive-stat-item green" onclick="filterBySanity('Virgin')" style="cursor: pointer;" title="Klik untuk filter data leads Virgin">
+          <div class="stat-top">
+            <span class="stat-label">⭐ Terverifikasi Virgin</span>
+            <span class="stat-badge-tag green">Dapat Insentif</span>
+          </div>
+          <span class="stat-value" id="stat-virgin-count">48 Leads</span>
+          <span class="stat-subtext" id="stat-virgin-subtext">9.9% dari total leads (Rp 240.000) 🔍</span>
+        </div>
+        <div class="incentive-stat-item yellow" onclick="filterBySanity('Belum Dicek')" style="cursor: pointer;" title="Klik untuk filter data leads yang belum dicek">
+          <div class="stat-top">
+            <span class="stat-label">⏳ Belum Dicek (Pending)</span>
+            <span class="stat-badge-tag yellow">Menunggu Tim GoFood</span>
+          </div>
+          <span class="stat-value" id="stat-pending-count">426 Leads</span>
+          <span class="stat-subtext" id="stat-pending-subtext">Potensi insentif: Rp 2.130.000 🔍</span>
+        </div>
+        <div class="incentive-stat-item red" onclick="filterBySanity('other')" style="cursor: pointer;" title="Klik untuk filter data leads non-virgin">
+          <div class="stat-top">
+            <span class="stat-label">❌ Non-Virgin / Not Eligible</span>
+            <span class="stat-badge-tag red">Tidak Dapat Insentif</span>
+          </div>
+          <span class="stat-value" id="stat-other-count">12 Leads</span>
+          <span class="stat-subtext" id="stat-other-subtext">Add Product, Double, dll. 🔍</span>
+        </div>
+        <div class="incentive-stat-item blue">
+          <div class="stat-top">
+            <span class="stat-label">🎯 Total Potensi Maksimal</span>
+            <span class="stat-badge-tag blue">Estimasi Total</span>
+          </div>
+          <span class="stat-value" id="stat-potential-val">Rp 2.370.000</span>
+          <span class="stat-subtext" id="stat-potential-subtext">Jika sisa leads pending disetujui Virgin</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Visualizations: Chart Grid -->
+    <section class="charts-grid" aria-label="Grafik dan Visualisasi">
+      <!-- Chart 1: Bar Chart Leads per Kota -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title">
+            <h2>Distribusi Leads per Kota</h2>
+            <p>Klik salah satu batang kota untuk melihat daftar merchant terkait</p>
+          </div>
+          <div class="tab-group">
+            <button id="btn-orient-h" class="tab-btn active" onclick="setBarOrientation('horizontal')">Horizontal</button>
+            <button id="btn-orient-v" class="tab-btn" onclick="setBarOrientation('vertical')">Vertikal</button>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas id="cityBarChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 2: Donut Chart Distribution -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title">
+            <h2>Proporsi Distribusi</h2>
+            <p>Pilih kategori untuk melihat komposisi data</p>
+          </div>
+          <div class="tab-group">
+            <button id="btn-dist-platform" class="tab-btn dist-tab active" data-mode="platform" onclick="setDistMode('platform')">Platform</button>
+            <button id="btn-dist-region" class="tab-btn dist-tab" data-mode="region" onclick="setDistMode('region')">Region</button>
+            <button id="btn-dist-priority" class="tab-btn dist-tab" data-mode="priority" onclick="setDistMode('priority')">Prioritas</button>
+            <button id="btn-dist-sanity" class="tab-btn dist-tab" data-mode="sanity" onclick="setDistMode('sanity')">Sanity Check</button>
+            <button id="btn-dist-scraper" class="tab-btn dist-tab" data-mode="scraper" onclick="setDistMode('scraper')">Scraper</button>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas id="distChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Summary Table Section -->
+    <section class="table-section" aria-label="Tabel Rekapitulasi per Kota">
+      <div class="section-header">
+        <div>
+          <h2>Tabel Rekapitulasi Leads per Kota</h2>
+          <p style="font-size: 0.8125rem; color: var(--text-muted);">
+            Data ringkasan agregat kota, kontribusi persentase, status virgin GoFood, sumber platform, dan tingkat prioritas
+          </p>
+        </div>
+        <div>
+          <a href="Rekap_Leads_Summary.xlsx" class="btn btn-outline" download="Rekap_Leads_Summary.xlsx">
+            📊 Download Format Excel (.xlsx)
+          </a>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="summary-table">
+          <thead>
+            <tr>
+              <th style="width: 50px; text-align: center;">No</th>
+              <th>Kota</th>
+              <th>Region</th>
+              <th style="text-align: right;">Total Leads</th>
+              <th>Kontribusi (%)</th>
+              <th style="text-align: right; color: #059669;">Virgin (GoFood)</th>
+              <th style="text-align: right;">TikTok</th>
+              <th style="text-align: right;">Instagram</th>
+              <th style="text-align: right;">Website</th>
+              <th style="text-align: right;">P0</th>
+              <th style="text-align: right;">P1</th>
+              <th style="text-align: right;">P2</th>
+              <th style="text-align: center;">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="summary-table-body">
+            <!-- Populated via app.js -->
+          </tbody>
+          <tfoot id="summary-table-foot">
+            <!-- Populated via app.js -->
+          </tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- Detailed Leads Explorer Section -->
+    <section class="table-section" id="leads-detail-section" aria-label="Daftar Lengkap Leads">
+      <div class="section-header">
+        <div>
+          <h2>Eksplorasi Data Detail Leads</h2>
+          <p style="font-size: 0.8125rem; color: var(--text-muted);" id="filtered-count">
+            Memuat data...
+          </p>
+        </div>
+        <button class="btn btn-outline" onclick="resetFilters()">
+          🔄 Reset Semua Filter
+        </button>
+      </div>
+
+      <!-- Controls & Filters -->
+      <div class="controls-bar">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="search-input" placeholder="Cari nama resto / scraper / kota...">
+        </div>
+
+        <select id="filter-scraper" class="filter-select" title="Pilih Scraper" onchange="updateScraperScope(this.value)">
+          <option value="all">Semua Scraper</option>
+        </select>
+
+        <select id="filter-city" class="filter-select">
+          <option value="all">Semua Kota</option>
+        </select>
+
+        <select id="filter-platform" class="filter-select">
+          <option value="all">Semua Platform</option>
+          <option value="Tiktok">TikTok</option>
+          <option value="Instagram">Instagram</option>
+          <option value="Website">Website</option>
+        </select>
+
+        <select id="filter-priority" class="filter-select">
+          <option value="all">Semua Prioritas</option>
+          <option value="P0">P0 (High)</option>
+          <option value="P1">P1 (Medium)</option>
+          <option value="P2">P2 (Standard)</option>
+        </select>
+
+        <select id="filter-sanity" class="filter-select">
+          <option value="all">Semua Status GoFood</option>
+          <option value="Virgin">⭐ Virgin (Dapat Rp 5.000)</option>
+          <option value="Belum Dicek">⏳ Belum Dicek / Pending</option>
+          <option value="Add Product">Add Product</option>
+          <option value="Double">Double</option>
+          <option value="Add Outlet">Add Outlet</option>
+          <option value="Existing">Existing</option>
+          <option value="Tidak masuk kriteria onboarding">Tidak Masuk Kriteria</option>
+        </select>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="detailed-leads-table">
+          <thead>
+            <tr>
+              <th style="width: 45px; text-align: center;">No</th>
+              <th>Nama Restoran / Merchant</th>
+              <th style="text-align: center;">Scraper</th>
+              <th>Kota & Wilayah</th>
+              <th>Platform</th>
+              <th>Prioritas</th>
+              <th style="text-align: center;">Sanity Check (GoFood)</th>
+              <th>Akun Media Sosial</th>
+              <th style="text-align: center;">Google Rating</th>
+              <th style="text-align: center;">Lokasi</th>
+            </tr>
+          </thead>
+          <tbody id="detailed-table-body">
+            <!-- Populated via app.js -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="pagination">
+        <div class="page-info" id="pagination-info">Menampilkan data...</div>
+        <div class="page-buttons" id="pagination-container"></div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-content">
+        <p id="footer-text">Laporan Rekapitulasi Leads • Multi-Scraper & Tim • Sumber: Google Sheets <code>[SOCIAL MEDIA SCRAPING]</code></p>
+        <p class="copyright-notice">© 2026 <strong>Muhammad Dzaki Salman</strong>. All rights reserved.</p>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Scripts -->
+  <script src="data_payload.js"></script>
+  <script src="app.js?v=20261029_layout_copyright"></script>
+</body>
+</html>
